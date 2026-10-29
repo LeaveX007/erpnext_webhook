@@ -7,7 +7,7 @@ import java.io.FileWriter
 
 class CustomerWriteService {
 
-    fun write(customer: Customer, fileOutput : String) {
+    fun write(customer: Customer, fileOutput: String) {
         val file = File("$fileOutput/${customer.customerName}_${getTimeMillis()}.csv")
         val bufferedWriter = BufferedWriter(FileWriter(file))
         val csvHeader = createCsvHeader()

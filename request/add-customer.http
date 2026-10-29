@@ -1,10 +1,13 @@
 ### GET request to example server
+
+# curl -X POST http://127.0.0.1:8080/customer -H "Content-Type: application/json" -d '{"customer_name": "Michael Pfeffer", "customer_type": "Company", "email_id": "michael@michael-pfeffer-consulting.com"}'
 POST http://127.0.0.1:8080/customer
 Content-Type: application/json
 
 {
   "customer_name": "Michael Pfeffer",
-  "email_id": "39"
+  "customer_type": "Company",
+  "email_id": "michael@michael-pfeffer-consulting.com"
 }
 
 ###

@@ -18,7 +18,7 @@ fun Application.configureCustomerRouting() {
                 customerWriteService.write(customer, file)
                 call.respond(HttpStatusCode.OK, "Kunde erfolgreich angelegt")
             } catch (e: Exception) {
-                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError)
             }
         }
     }

@@ -6,4 +6,4 @@ ktor:
       - com.michaelpfefferconsulting.SerializationKt.configureSerialization
       - com.michaelpfefferconsulting.RoutingKt.configureCustomerRouting
 
-file-output: C:/Temp
+file-output: C:/Temp/customers.csv

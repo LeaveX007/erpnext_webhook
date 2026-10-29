@@ -4,4 +4,6 @@ ktor:
   application:
     modules:
       - com.michaelpfefferconsulting.SerializationKt.configureSerialization
-      - com.michaelpfefferconsulting.RoutingKt.configureRouting
+      - com.michaelpfefferconsulting.RoutingKt.configureCustomerRouting
+
+file-output: C:/Temp

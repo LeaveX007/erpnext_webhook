@@ -20,6 +20,10 @@ dependencies {
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.contentNegotiation)
     implementation(ktorLibs.server.core)
+    implementation(ktorLibs.client.cio)
+    implementation(ktorLibs.client.contentNegotiation)
+    implementation(ktorLibs.client.core)
+    implementation(ktorLibs.client.serialization)
     implementation(libs.logback.classic)
 
     testImplementation(kotlin("test"))

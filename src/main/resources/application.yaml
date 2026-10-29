@@ -1,0 +1,7 @@
+ktor:
+  deployment:
+    port: 8080
+  application:
+    modules:
+      - com.michaelpfefferconsulting.SerializationKt.configureSerialization
+      - com.michaelpfefferconsulting.RoutingKt.configureRouting

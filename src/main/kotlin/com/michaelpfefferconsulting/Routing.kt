@@ -15,14 +15,17 @@ fun Application.configureCustomerRouting() {
         post("/customer") {
             val scope = CoroutineScope(Dispatchers.IO)
             val customer = call.receive<Customer>()
-            val fileOutput = environment.config.property("file-output").getString()
             scope.launch {
+                val fileOutput = environment.config.property("file-output").getString()
                 val csvFileCreatorService = CsvFileCreatorService(
-                    CustomerWriteService(),
                     CsvHeaderCreatorService(),
                 )
                 val filePath = Path(fileOutput)
-                csvFileCreatorService.create(filePath, customer)
+                csvFileCreatorService.create(filePath)
+                val csvFileWriterService = CsvFileWriterService(
+                    CustomerWriteService()
+                )
+                csvFileWriterService.write(filePath.toFile(), customer)
             }
             call.respond(HttpStatusCode.OK, "Kunde erfolgreich angelegt")
         }

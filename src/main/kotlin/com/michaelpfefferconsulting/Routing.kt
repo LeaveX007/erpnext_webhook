@@ -17,24 +17,16 @@ fun Application.configureCustomerRouting() {
             val hmacSignatureKey = environment.config.property("hmac-signature-key").getString()
             if (!frappeWebhookSignature.isNullOrEmpty() && hmacSignatureKey.isNotBlank()) {
                 val jsonCustomer = call.receiveText()
-                val security = Security()
-                val signatureValid = security.checkSignature(
-                    frappeWebhookSignature,
-                    jsonCustomer,
-                    hmacSignatureKey
-                )
+                val security = Security(HMAC())
+                val signatureValid = security.checkSignature(frappeWebhookSignature, jsonCustomer, hmacSignatureKey)
                 if (signatureValid) {
                     val scope = CoroutineScope(Dispatchers.IO)
                     scope.launch {
                         val fileOutput = environment.config.property("file-output").getString()
-                        val csvFileCreatorService = CsvFileCreatorService(
-                            CsvHeaderCreatorService(),
-                        )
+                        val csvFileCreatorService = CsvFileCreatorService(CsvHeaderCreatorService())
                         val filePath = Path(fileOutput)
                         csvFileCreatorService.create(filePath)
-                        val csvFileWriterService = CsvFileWriterService(
-                            CustomerWriteService()
-                        )
+                        val csvFileWriterService = CsvFileWriterService(CustomerWriteService())
                         val customer = call.receive<Customer>()
                         csvFileWriterService.write(filePath.toFile(), customer)
                     }

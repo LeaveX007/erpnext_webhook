@@ -2,10 +2,12 @@ package com.michaelpfefferconsulting
 
 import kotlin.io.encoding.Base64
 
-class Security {
+class Security(
+    private val hmac : HMAC
+) {
 
     fun checkSignature(signature: String, text: String, key: String): Boolean {
-        val hmacSha256 = generateHmacSha256(text, key)
+        val hmacSha256 = hmac.generateHmacSha256(text, key)
         val base64 = encodeToBase64(hmacSha256)
         return signature.contentEquals(base64)
     }

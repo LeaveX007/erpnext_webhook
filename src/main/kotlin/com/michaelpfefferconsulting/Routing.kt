@@ -8,21 +8,23 @@ import io.ktor.server.routing.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.io.encoding.Base64
 import kotlin.io.path.Path
 
 fun Application.configureCustomerRouting() {
     routing {
         post("/customer") {
-            val scope = CoroutineScope(Dispatchers.IO)
             val frappeWebhookSignature = call.request.headers["X-Frappe-Webhook-Signature"]
             val hmacSignatureKey = environment.config.property("hmac-signature-key").getString()
             if (!frappeWebhookSignature.isNullOrEmpty() && hmacSignatureKey.isNotBlank()) {
                 val jsonCustomer = call.receiveText()
-                val hmacSha256 = generateHmacSha256(jsonCustomer, hmacSignatureKey)
-                val base64 = Base64.encode(hmacSha256.encodeToByteArray())
-                if (frappeWebhookSignature.contentEquals(base64)) {
-                    val customer = call.receive<Customer>()
+                val security = Security()
+                val signatureValid = security.checkSignature(
+                    frappeWebhookSignature,
+                    jsonCustomer,
+                    hmacSignatureKey
+                )
+                if (signatureValid) {
+                    val scope = CoroutineScope(Dispatchers.IO)
                     scope.launch {
                         val fileOutput = environment.config.property("file-output").getString()
                         val csvFileCreatorService = CsvFileCreatorService(
@@ -33,6 +35,7 @@ fun Application.configureCustomerRouting() {
                         val csvFileWriterService = CsvFileWriterService(
                             CustomerWriteService()
                         )
+                        val customer = call.receive<Customer>()
                         csvFileWriterService.write(filePath.toFile(), customer)
                     }
                     call.respond(HttpStatusCode.OK, "Kunde erfolgreich angelegt")

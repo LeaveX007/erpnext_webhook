@@ -13,21 +13,21 @@ import kotlin.io.path.Path
 fun Application.configureCustomerRouting() {
     routing {
         post("/customer") {
-            val frappeWebhookSignature = call.request.headers["X-Frappe-Webhook-Signature"]
             val hmacSignatureKey = environment.config.property("hmac-signature-key").getString()
+            val frappeWebhookSignature = call.request.headers["X-Frappe-Webhook-Signature"]
             if (!frappeWebhookSignature.isNullOrEmpty() && hmacSignatureKey.isNotBlank()) {
-                val jsonCustomer = call.receiveText()
                 val security = Security(HMAC())
+                val jsonCustomer = call.receiveText()
                 val signatureValid = security.checkSignature(frappeWebhookSignature, jsonCustomer, hmacSignatureKey)
                 if (signatureValid) {
                     val scope = CoroutineScope(Dispatchers.IO)
                     scope.launch {
                         val fileOutput = environment.config.property("file-output").getString()
-                        val csvFileCreatorService = CsvFileCreatorService(CsvHeaderCreatorService())
                         val filePath = Path(fileOutput)
+                        val csvFileCreatorService = CsvFileCreatorService(CsvHeaderCreatorService())
                         csvFileCreatorService.create(filePath)
-                        val csvFileWriterService = CsvFileWriterService(CustomerWriteService())
                         val customer = call.receive<Customer>()
+                        val csvFileWriterService = CsvFileWriterService(CustomerWriteService())
                         csvFileWriterService.write(filePath.toFile(), customer)
                     }
                     call.respond(HttpStatusCode.OK, "Kunde erfolgreich angelegt")

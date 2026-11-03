@@ -1,7 +1,18 @@
-### GET request to example server
+### sync-POST Request
 
 # curl -X POST http://127.0.0.1:8080/customer -H "Content-Type: application/json" -d '{"customer_name": "Michael Pfeffer", "customer_type": "Company", "email_id": "michael@michael-pfeffer-consulting.com"}'
-POST http://127.0.0.1:8080/customer
+POST http://127.0.0.1:8080/customer-sync
+Content-Type: application/json
+
+{
+  "customer_name": "Michael Pfeffer",
+  "customer_type": "Company",
+  "email_id": "michael@michael-pfeffer-consulting.com"
+}
+
+### async-POST Request
+
+POST http://127.0.0.1:8080/customer-async
 Content-Type: application/json
 
 {

@@ -7,12 +7,18 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.io.path.Path
+import kotlin.time.Duration.Companion.milliseconds
 
 fun Application.configureCustomerRouting() {
     routing {
-        post("/customer") {
+        post("/customer-sync") {
+            delay(8000.milliseconds)
+            call.respond(HttpStatusCode.OK, "Kunde erfolgreich angelegt")
+        }
+        post("/customer-async") {
             val hmacSignatureKey = environment.config.property("hmac-signature-key").getString()
             val frappeWebhookSignature = call.request.headers["X-Frappe-Webhook-Signature"]
             if (!frappeWebhookSignature.isNullOrEmpty() && hmacSignatureKey.isNotBlank()) {

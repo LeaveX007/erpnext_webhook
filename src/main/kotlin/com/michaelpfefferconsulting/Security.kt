@@ -6,10 +6,14 @@ class Security(
     private val hmac: HMAC
 ) {
 
-    fun checkSignature(base64Signature: String, text: String, key: String): Boolean {
+    fun getBase64Signature(text: String, key: String): String {
         val hmacSha256 = hmac.generateHmacSha256(text, key)
-        val base64 = encodeToBase64(hmacSha256)
-        return base64Signature.contentEquals(base64)
+        return encodeToBase64(hmacSha256)
+    }
+
+    fun checkSignature(base64SignatureToCheck: String, text: String, key: String): Boolean {
+        val base64Signature = getBase64Signature(text, key)
+        return base64SignatureToCheck.contentEquals(base64Signature)
     }
 
     private fun encodeToBase64(hmacSha256: String): String {

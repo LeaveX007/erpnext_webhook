@@ -19,7 +19,6 @@ fun Application.configureCustomerRouting() {
             if (!frappeWebhookSignature.isNullOrEmpty() && hmacSignatureKey.isNotBlank()) {
                 val security = Security(HMAC())
                 val jsonCustomer = call.receiveText()
-                println(jsonCustomer)
                 val signatureValid = security.checkSignature(frappeWebhookSignature, jsonCustomer, hmacSignatureKey)
                 if (signatureValid) {
                     val scope = CoroutineScope(Dispatchers.IO)

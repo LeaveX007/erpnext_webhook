@@ -7,18 +7,13 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import kotlin.io.path.Path
-import kotlin.time.Duration.Companion.milliseconds
 
 fun Application.configureCustomerRouting() {
     routing {
-        post("/customer-sync") {
-            delay(8000.milliseconds)
-            call.respond(HttpStatusCode.OK, "Kunde erfolgreich angelegt")
-        }
-        post("/customer-async") {
+        post("/customer") {
             val hmacSignatureKey = environment.config.property("hmac-signature-key").getString()
             val frappeWebhookSignature = call.request.headers["X-Frappe-Webhook-Signature"]
             if (!frappeWebhookSignature.isNullOrEmpty() && hmacSignatureKey.isNotBlank()) {
@@ -32,7 +27,7 @@ fun Application.configureCustomerRouting() {
                         val filePath = Path(fileOutput)
                         val csvFileCreatorService = CsvFileCreatorService(CsvHeaderCreatorService())
                         csvFileCreatorService.create(filePath)
-                        val customer = call.receive<Customer>()
+                        val customer = Json.decodeFromString<Customer>(jsonCustomer)
                         val csvFileWriterService = CsvFileWriterService(CustomerWriteService())
                         csvFileWriterService.write(filePath.toFile(), customer)
                     }

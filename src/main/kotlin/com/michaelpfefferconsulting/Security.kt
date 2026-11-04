@@ -3,17 +3,20 @@ package com.michaelpfefferconsulting
 import kotlin.io.encoding.Base64
 
 class Security(
-    private val hmac : HMAC
+    private val hmac: HMAC
 ) {
 
-    fun checkSignature(signature: String, text: String, key: String): Boolean {
+    fun checkSignature(base64Signature: String, text: String, key: String): Boolean {
         val hmacSha256 = hmac.generateHmacSha256(text, key)
         val base64 = encodeToBase64(hmacSha256)
-        return signature.contentEquals(base64)
+        return base64Signature.contentEquals(base64)
     }
 
     private fun encodeToBase64(hmacSha256: String): String {
-        return Base64.encode(hmacSha256.encodeToByteArray())
+        val decodedBytes = hmacSha256.chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
+        return Base64.encode(decodedBytes)
     }
 
 }

@@ -1,37 +1,56 @@
 # ERPNext Webhook Service
 
-Ein leichtgewichtiger und performanter Webhook-Dienst auf Basis von **Kotlin** und **Ktor (CIO)**, der Webhook-Ereignisse (z. B. aus **ERPNext**) entgegennimmt, validiert und Kundendaten als CSV-Dateien im Dateisystem ablegt.
+Ein leichtgewichtiger und performanter Webhook-Dienst auf Basis von **Kotlin** und **Ktor (CIO)**, der Webhook-Ereignisse aus **ERPNext** entgegennimmt, über **HMAC-SHA256** kryptografisch validiert und empfangene Kundendaten asynchron in einer CSV-Datei im Dateisystem speichert.
 
 ---
 
 ## Inhaltsverzeichnis
 
 - [Überblick](#überblick)
+- [Funktionen & Highlights](#funktionen--highlights)
 - [Architektur & Technologien](#architektur--technologien)
 - [Voraussetzungen](#voraussetzungen)
 - [Konfiguration](#konfiguration)
+- [Sicherheit & HMAC-Validierung](#sicherheit--hmac-validierung)
 - [API-Dokumentation](#api-dokumentation)
-  - [Endpunkt: Kunde anlegen](#endpunkt-kunde-anlegen)
+  - [Endpunkt: Kunde empfangen](#endpunkt-kunde-empfangen)
 - [CSV-Ausgabeformat](#csv-ausgabeformat)
 - [Bauen & Starten](#bauen--starten)
 - [Testen des Dienstes](#testen-des-dienstes)
-  - [cURL](#curl)
   - [HTTP-Client-Datei](#http-client-datei)
-- [ERPNext-Integration](#erpnext-integration)
+  - [cURL](#curl)
+- [ERPNext-Integration (Webhook-Einrichtung)](#erpnext-integration-webhook-einrichtung)
 
 ---
 
 ## Überblick
 
-Dieser Service dient als Schnittstelle zwischen ERPNext (oder ähnlichen Drittsystemen) und lokalen/nachgelagerten Prozessen. Sobald in ERPNext ein neuer Kunde angelegt oder aktualisiert wird, sendet ERPNext einen Webhook an diesen Dienst. Der Dienst deserialisiert das JSON-Payload und speichert die Kundendaten strukturiert als CSV-Datei in einem konfigurierten Verzeichnis ab.
+Dieser Service fungiert als Schnittstelle zwischen ERPNext (bzw. dem Frappe-Framework) und lokalen oder nachgelagerten Systemen. Sobald in ERPNext ein Kunde angelegt oder gespeichert wird, übermittelt ERPNext einen Webhook an diesen Dienst.
+
+Der Ablauf:
+1. Der Dienst empfängt die Anfrage am `/customer`-Endpunkt.
+2. Der im Header `X-Frappe-Webhook-Signature` übermittelte Hash wird mittels HMAC-SHA256 (Base64-kodiert) gegen den konfigurierten Sicherheitsschlüssel validiert.
+3. Bei gültiger Signatur wird das JSON deserialisiert und die Kundendaten werden über Coroutines asynchron in die konfigurierte CSV-Datei angehängt.
+4. Existiert die Zieldatei noch nicht, wird sie automatisch inklusive CSV-Header angelegt.
+
+---
+
+## Funktionen & Highlights
+
+- **Kryptografische Absicherung:** Verifikation der Webhook-Signatur (`X-Frappe-Webhook-Signature`) verhindert unbefugte Anfragen und Manipulation.
+- **Asynchrone I/O-Verarbeitung:** Dateischreiboperationen laufen über Kotlin Coroutines im `Dispatchers.IO`-Scope, um den Ktor-Worker-Thread nicht zu blockieren.
+- **Automatisches CSV-Dateimanagement:** Erstellt bei Bedarf die Zieldatei inklusive Kopfzeile und hängt neue Einträge zeilenweise an.
+- **Tolerante JSON-Deserialisierung:** Unbekannte oder zusätzliche Felder im JSON-Payload werden ignoriert (`ignoreUnknownKeys = true`).
 
 ---
 
 ## Architektur & Technologien
 
 - **Programmiersprache:** [Kotlin](https://kotlinlang.org/) (JVM Toolchain 21)
-- **Framework:** [Ktor](https://ktor.io/) mit CIO Engine
-- **JSON-Serialisierung:** `kotlinx.serialization` (mit automatischer Ignorierung unbekannter JSON-Schlüssel)
+- **Web-Framework:** [Ktor](https://ktor.io/) mit CIO Engine
+- **Asynchronität:** Kotlin Coroutines
+- **JSON-Serialisierung:** `kotlinx.serialization`
+- **Kryptografie:** Java Cryptography Architecture (JCA / `HmacSHA256`) & Kotlin Base64
 - **Logging:** Logback Classic / SLF4J
 - **Build-Tool:** Gradle (Kotlin DSL)
 
@@ -40,7 +59,7 @@ Dieser Service dient als Schnittstelle zwischen ERPNext (oder ähnlichen Drittsy
 ## Voraussetzungen
 
 - **Java Development Kit (JDK) 21** oder höher
-- Optional: ERPNext-Instanz mit aktivierter Webhook-Funktion
+- Optional: ERPNext- / Frappe-Instanz mit aktivierter Webhook-Funktion
 
 ---
 
@@ -57,24 +76,46 @@ ktor:
       - com.michaelpfefferconsulting.SerializationKt.configureSerialization
       - com.michaelpfefferconsulting.RoutingKt.configureCustomerRouting
 
-file-output: C:/Temp
+file-output: C:/Temp/customers.csv
+
+hmac-signature-key: "fdfjekucuc32"
 ```
 
 ### Konfigurationsparameter:
-- `ktor.deployment.port`: Port, auf dem der Webhook-Server lauscht (Standard: `8080`).
-- `file-output`: Zielverzeichnis für die generierten CSV-Dateien (z. B. `C:/Temp` unter Windows oder `/var/data/customers` unter Linux/macOS). **Hinweis:** Stellen Sie sicher, dass das Verzeichnis existiert und Schreibrechte vorhanden sind.
+
+| Parameter | Beschreibung | Beispiel / Standard |
+| :--- | :--- | :--- |
+| `ktor.deployment.port` | Port, auf dem der Webhook-Server lauscht | `8080` |
+| `file-output` | Vollständiger Dateipfad zur Ziel-CSV-Datei | `C:/Temp/customers.csv` (Windows) oder `/var/data/customers.csv` (Linux/macOS) |
+| `hmac-signature-key` | Geheimer Schlüssel für die HMAC-SHA256-Signaturüberprüfung (muss mit dem Webhook Secret in ERPNext übereinstimmen) | `"fdfjekucuc32"` |
+
+> **Hinweis:** Stellen Sie sicher, dass das übergeordnete Verzeichnis von `file-output` existiert und der Prozess über die erforderlichen Schreibrechte verfügt.
+
+---
+
+## Sicherheit & HMAC-Validierung
+
+ERPNext sendet bei konfigurierter Webhook-Sicherheit einen `X-Frappe-Webhook-Signature`-Header mit. Dieser enthält den Base64-kodierten HMAC-SHA256-Hash des rohen Request-Bodys, berechnet mit dem konfigurierten `hmac-signature-key`.
+
+Der Dienst prüft jede Anfrage wie folgt:
+- Ist der Header `X-Frappe-Webhook-Signature` vorhanden?
+- Stimmt der berechnete Base64-HMAC-SHA256-Wert mit dem Header-Wert überein?
+
+Anfragen mit ungültiger oder fehlender Signatur werden sofort mit HTTP-Status `400 Bad Request` abgewiesen.
 
 ---
 
 ## API-Dokumentation
 
-### Endpunkt: Kunde anlegen
+### Endpunkt: Kunde empfangen
 
-Nimmt Kundendaten im JSON-Format entgegen und speichert sie als CSV.
+Nimmt Kundendaten im JSON-Format entgegen, prüft die Signatur und speichert sie in der CSV-Datei.
 
 - **URL:** `/customer`
 - **Methode:** `POST`
-- **Headers:** `Content-Type: application/json`
+- **Headers:**
+  - `Content-Type: application/json`
+  - `X-Frappe-Webhook-Signature: <base64_hmac_sha256>`
 
 #### Request-Body
 
@@ -88,42 +129,38 @@ Nimmt Kundendaten im JSON-Format entgegen und speichert sie als CSV.
 ```json
 {
   "customer_name": "Michael Pfeffer",
-  "customer_type": "Individual",
-  "email_id": "info@michaelpfefferconsulting.com"
+  "customer_type": "Company",
+  "email_id": "michael@michael-pfeffer-consulting.com"
 }
 ```
 
 #### Antworten:
-- **`200 OK`**: `"Kunde erfolgreich angelegt"`
-- **`400 Bad Request`**: Ungültiges JSON-Format oder fehlende Pflichtfelder.
+- **`200 OK`**: `"Kunde erfolgreich angelegt"` (Payload wurde validiert und asynchron in die CSV-Datei geschrieben).
+- **`400 Bad Request`**: Fehlende/ungültige HMAC-Signatur, leerer Sicherheitsschlüssel oder ungültiges JSON-Payload.
 
 ---
 
 ## CSV-Ausgabeformat
 
-Für jeden empfangenen Kunden wird eine neue CSV-Datei mit folgendem Namensschema im konfigurierten `file-output`-Verzeichnis erzeugt:
+Alle empfangenen Kunden werden in die in `file-output` definierte CSV-Datei geschrieben.
 
-```text
-<customer_name>_<timestamp>.csv
-```
-
-### Aufbau der CSV-Datei:
 - **Trennzeichen:** Semikolon (`;`)
 - **Kopfzeile:** `customer_name;customer_type;email_id`
-- **Beispielinhalt:**
+- **Dateiaufbau:**
   ```csv
   customer_name;customer_type;email_id
-  Michael Pfeffer;Individual;info@michaelpfefferconsulting.com
+  Michael Pfeffer;Company;michael@michael-pfeffer-consulting.com
+  Mustermann GmbH;Company;kontakt@mustermann.de
   ```
 
 ---
 
 ## Bauen & Starten
 
-Das Projekt enthält den Gradle-Wrapper. Führen Sie die folgenden Befehle im Projektstammverzeichnis aus:
+Das Projekt verwendet den Gradle-Wrapper.
 
 ### Server starten
-- **Windows (PowerShell/CMD):**
+- **Windows (PowerShell / CMD):**
   ```powershell
   .\gradlew.bat run
   ```
@@ -132,17 +169,18 @@ Das Projekt enthält den Gradle-Wrapper. Führen Sie die folgenden Befehle im Pr
   ./gradlew run
   ```
 
-Sobald der Server gestartet ist, wird in der Konsole folgende Ausgabe angezeigt:
+Sobald der Server läuft, erscheint im Log:
 ```text
 INFO  Application - Responding at http://0.0.0.0:8080
 ```
 
-### Projekt bauen & testen
+### Tests ausführen
 ```powershell
-# Tests ausführen
 .\gradlew.bat test
+```
 
-# Fat-JAR / Distributionsartefakt erstellen
+### Artefakt bauen
+```powershell
 .\gradlew.bat build
 ```
 
@@ -150,34 +188,50 @@ INFO  Application - Responding at http://0.0.0.0:8080
 
 ## Testen des Dienstes
 
+### HTTP-Client-Datei
+
+Für IntelliJ IDEA oder den VS Code REST Client steht unter `request/add-customer.http` eine vorkonfigurierte Anfrage bereit:
+
+```http
+### POST Request
+POST http://127.0.0.1:8080/customer
+Content-Type: application/json
+X-Frappe-Webhook-Signature: RWuWldMfjOoT+utFjWrlxZlH1ia8ULDvJhg0IDqPuCs=
+
+{
+  "customer_name": "Michael Pfeffer",
+  "customer_type": "Company",
+  "email_id": "michael@michael-pfeffer-consulting.com"
+}
+```
+
 ### cURL
 
 ```bash
 curl -X POST http://localhost:8080/customer \
   -H "Content-Type: application/json" \
+  -H "X-Frappe-Webhook-Signature: RWuWldMfjOoT+utFjWrlxZlH1ia8ULDvJhg0IDqPuCs=" \
   -d '{
-    "customer_name": "Mustermann GmbH",
+    "customer_name": "Michael Pfeffer",
     "customer_type": "Company",
-    "email_id": "kontakt@mustermann.de"
+    "email_id": "michael@michael-pfeffer-consulting.com"
   }'
 ```
 
-### HTTP-Client-Datei
-
-Für IntelliJ IDEA oder VS Code REST Client steht unter `request/add-customer.http` eine vorgefertigte HTTP-Anfrage zur Verfügung.
-
 ---
 
-## ERPNext-Integration
+## ERPNext-Integration (Webhook-Einrichtung)
 
-Um ERPNext anzubinden, kann unter **ERPNext > Setup > Integrations > Webhook** ein neuer Webhook eingerichtet werden:
+Um ERPNext anzubinden, richten Sie unter **ERPNext > Setup > Integrations > Webhook** (bzw. Frappe Webhook) einen neuen Webhook ein:
 
 1. **DocType:** `Customer`
-2. **Event:** `After Insert` / `After Save`
-3. **Request URL:** `http://<ihr-server-ip>:8080/customer`
+2. **Doc Event:** `after_insert` (oder `on_update` / `after_save` je nach gewünschtem Auslöser)
+3. **Request URL:** `http://<server-ip>:8080/customer`
 4. **Request Method:** `POST`
 5. **Request Structure:** `JSON`
-6. **Webhook Data (Felder):**
+6. **Webhook Secret:** Tragen Sie denselben Schlüssel ein wie in `application.yaml` unter `hmac-signature-key` (z. B. `fdfjekucuc32`).
+7. **Webhook Headers:** `Content-Type: application/json`
+8. **Webhook Data (Felder):**
    - `customer_name` -> `doc.customer_name`
    - `customer_type` -> `doc.customer_type`
    - `email_id` -> `doc.email_id`
